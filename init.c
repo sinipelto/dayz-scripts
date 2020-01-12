@@ -44,8 +44,10 @@ enum CmdType
 	CAR,
 	TELEPORT,
 	KILL,
-	GUN,
 	SUICIDE,
+	PLAYERINFO,
+	SPEAK,
+	ITEM,
 	UNKNOWN
 }
 
@@ -53,7 +55,14 @@ class CustomMission: MissionServer
 {
 	// SteamIDs of all admin players stored here
 	private ref TStringArray m_admins;
-	
+		
+	override void OnInit()
+	{
+		super.OnInit();
+		
+		m_admins = new TStringArray;
+		m_admins.Insert("");
+	}
 	
 	void SpawnCar(PlayerBase player, int type)
 	{
@@ -140,6 +149,24 @@ class CustomMission: MissionServer
 		player.SetPosition(p);
 	}
 	
+	void PlayerInfo(PlayerBase player)
+	{
+		ref array<Man> players = new array<Man>;
+		GetGame().GetPlayers( players );
+		
+		for ( int i = 0; i < players.Count(); ++i )
+		{
+			Man plr = players.Get(i);
+			
+			PlayerBase p;
+			Class.CastTo(p, plr);
+			
+			string info = "Player {" + string.ToString(i) + "}" + "  " + "Name: " + plr.GetIdentity().GetName() + "  " + "Pos: " + plr.GetPosition().ToString() + "  " + "Health: " + string.ToString(plr.GetHealth()) + "  " + "SteamID64: " + plr.GetIdentity().GetPlainId();
+
+			SendPlayerMessage(player, info);
+		}
+	}
+	
 	bool Command(PlayerBase player, string command)
 	{
 		CmdType type;
@@ -147,11 +174,14 @@ class CustomMission: MissionServer
 		if (command.Contains("/car")) type = CmdType.CAR;
 		else if (command.Contains("/tele")) type = CmdType.TELEPORT;
 		else if (command.Contains("/kill")) type = CmdType.KILL;
+		else if (command.Contains("/stats")) type = CmdType.PLAYERINFO;
+		else if (command.Contains("/say")) type = CmdType.SPEAK;
+		else if (command.Contains("/give")) type = CmdType.ITEM;
 		else type = CmdType.UNKNOWN;
 		
 		if (type == CmdType.UNKNOWN) {
 			SendPlayerMessage(player, "Unknown command!");
-			SendPlayerMessage(player, "Commands: /car [TYPE] /tele [x y z] /kill [PLAYER] /gun [TYPE]");
+			SendPlayerMessage(player, "Commands: /car [TYPE] /tele [x y z] /kill [PLAYER] /give [ITEM] /say [MESSAGE] /stats /suicide");
 			return false;
 		}
 		
@@ -167,16 +197,56 @@ class CustomMission: MissionServer
 				else if (command.Contains("sedan")) {
 					SpawnCar(player, 2);					
 				}
-
 				else {
 					SendPlayerMessage(player, "CommandHandler: Car type not found.");
-				
 				}
 				
 				break;
 				
 			case CmdType.TELEPORT:
 				SetPos(player, "4300 30 11200");
+				break;
+				
+			case CmdType.PLAYERINFO:
+				PlayerInfo(player);
+				break;
+				
+			case CmdType.SPEAK:
+				if (command.Length() < 8) {
+					SendPlayerMessage(player, "Syntax: /say [MESSAGE]");
+					return false;
+				}
+				
+				string speakArg = command.Substring( 6, command.Length() - 6 - 1 ); // Last char is ', skip it
+				SendGlobalMessage(speakArg);
+				
+				break;
+				
+			case CmdType.ITEM:
+				if (command.Length() < 9) {
+					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME]");
+					return false;
+				}
+
+				string itemArg = command.Substring( 7, command.Length() - 7 - 1 );
+				
+				EntityAI item = player.GetHumanInventory().GetEntityInHands();
+				
+				if (item) {
+					SendPlayerMessage(player, "Error: hands not empty.");
+					return false;
+				}
+				
+				SendPlayerMessage(player, "Spawning item: " + itemArg);
+				item = player.GetHumanInventory().CreateInHands(itemArg);
+				
+				if (item) {
+					item.SetHealth("", "", 100);
+				}
+				else {
+					SendPlayerMessage(player, "Could not create item.");
+				}
+				
 				break;
 				
 			default:
@@ -186,20 +256,12 @@ class CustomMission: MissionServer
 		return true;
 	}
 	
-	override void OnInit()
-	{
-		super.OnInit();
-		
-		m_admins = new TStringArray;
-		m_admins.Insert("STEAMID64");
-	}
-	
 	override PlayerBase CreateCharacter(PlayerIdentity identity, vector pos, ParamsReadContext ctx, string characterName)
 	{
 		// Custom user spawn handling by Steam ID (steamID64)
 
-		const TStringArray ids = {"STEAMID64", "STEAMID64", "STEAMID64"};
-
+		const TStringArray ids = {"", "", ""};
+		
 		const vector custPos = "6400 0 10300".ToVector();
 
 		string id = identity.GetPlainId();
@@ -211,6 +273,9 @@ class CustomMission: MissionServer
 				break;
 			}
 		}
+		
+		// Disable custom spawn handling -> uncomment line below
+		special = false;
 
 		Entity playerEnt;
 
@@ -287,10 +352,7 @@ class CustomMission: MissionServer
 			
 			identity = newParams.param1;
 			
-			string name;
-			name = identity.GetFullName();
-			if (!name) name = identity.GetName();
-			
+			string name = identity.GetName();
 			SendGlobalMessage("Player " + name + " joined.");
 			
 			break;
@@ -314,7 +376,7 @@ class CustomMission: MissionServer
 			}
 			
 			// Check that player has sufficient privileges to execute commands
-			if (m_admins.Find( sender.GetIdentity().GetPlainId() ) == -1) {
+			if ( !IsAdmin(sender) ) {
 				SendPlayerMessage(sender, "Sorry, you are not an admin!");
 				break;
 			}
@@ -327,24 +389,26 @@ class CustomMission: MissionServer
 		}
 	}
 	
+	bool IsAdmin(PlayerBase player)
+	{
+		return m_admins.Find( player.GetIdentity().GetPlainId() ) != -1;
+	}
+	
 	PlayerBase GetPlayerByName(string name)
 	{
 		ref array<Man> players = new array<Man>;
 		GetGame().GetPlayers( players );
 		
+		PlayerBase p;
+		
 		for ( int i = 0; i < players.Count(); ++i )
 		{
 			Man player = players.Get(i);
-			
-			PlayerBase p;
 			Class.CastTo(p, player);
 
-			SendGlobalMessage("GetName: " + string.ToString(p.GetIdentity().GetName() ) );
-			// Returns character name
-			
-			if( p.GetIdentity().GetName() == name )
-				SendGlobalMessage("TRUE!");
+			if ( "'" + p.GetIdentity().GetName() + "'" == name && IsAdmin(p) ) {
 				return p;
+			}
 		}
 		
 		// Player with given name not found
