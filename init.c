@@ -39,18 +39,6 @@ void main()
 	}
 }
 
-enum CmdType
-{
-	CAR,
-	TELEPORT,
-	KILL,
-	SUICIDE,
-	PLAYERINFO,
-	SPEAK,
-	ITEM,
-	UNKNOWN
-}
-
 class CustomMission: MissionServer
 {
 	// SteamIDs of all admin players stored here
@@ -60,8 +48,9 @@ class CustomMission: MissionServer
 	{
 		super.OnInit();
 		
+		// Insert admin IDs here
 		m_admins = new TStringArray;
-		m_admins.Insert("");
+		m_admins.Insert("123");
 	}
 	
 	void SpawnCar(PlayerBase player, int type)
@@ -143,10 +132,17 @@ class CustomMission: MissionServer
 		}
 	}
 	
-	void SetPos(PlayerBase player, string pos)
+	void SafeSetPos(PlayerBase player, string pos)
 	{
+		// Safe conversion
 		vector p = pos.ToVector();
-		player.SetPosition(p);
+		
+		if (p) {
+			player.SetPosition(p);
+			return;
+		}
+		
+		SendPlayerMessage(player, "Invalid coordinates.");
 	}
 	
 	void PlayerInfo(PlayerBase player)
@@ -154,14 +150,13 @@ class CustomMission: MissionServer
 		ref array<Man> players = new array<Man>;
 		GetGame().GetPlayers( players );
 		
+		PlayerBase p;
+		
 		for ( int i = 0; i < players.Count(); ++i )
 		{
-			Man plr = players.Get(i);
+			Class.CastTo(p, players.Get(i));
 			
-			PlayerBase p;
-			Class.CastTo(p, plr);
-			
-			string info = "Player {" + string.ToString(i) + "}" + "  " + "Name: " + plr.GetIdentity().GetName() + "  " + "Pos: " + plr.GetPosition().ToString() + "  " + "Health: " + string.ToString(plr.GetHealth()) + "  " + "SteamID64: " + plr.GetIdentity().GetPlainId();
+			string info = "Player {" + string.ToString(i) + "}" + "  " + "Name: " + p.GetIdentity().GetName() + "  " + "Pos: " + p.GetPosition().ToString() + "  " + "Health: " + string.ToString(p.GetHealth()) + "  " + "SteamID64: " + p.GetIdentity().GetPlainId();
 
 			SendPlayerMessage(player, info);
 		}
@@ -169,66 +164,75 @@ class CustomMission: MissionServer
 	
 	bool Command(PlayerBase player, string command)
 	{
-		CmdType type;
+		const string helpMsg = "Commands: /help /car /warp /kill /give /say /stats /suicide /here /there";
 		
-		if (command.Contains("/car")) type = CmdType.CAR;
-		else if (command.Contains("/tele")) type = CmdType.TELEPORT;
-		else if (command.Contains("/kill")) type = CmdType.KILL;
-		else if (command.Contains("/stats")) type = CmdType.PLAYERINFO;
-		else if (command.Contains("/say")) type = CmdType.SPEAK;
-		else if (command.Contains("/give")) type = CmdType.ITEM;
-		else type = CmdType.UNKNOWN;
+		// Split command message into args
+		TStringArray args = new TStringArray;
+		MySplit(command, " ", args);
 		
-		if (type == CmdType.UNKNOWN) {
-			SendPlayerMessage(player, "Unknown command!");
-			SendPlayerMessage(player, "Commands: /car [TYPE] /tele [x y z] /kill [PLAYER] /give [ITEM] /say [MESSAGE] /stats /suicide");
-			return false;
-		}
-		
-		switch (type)
+		switch (args[0])
 		{
-			case CmdType.CAR:
-				if (command.Contains("offroad")) {
+			case "/car":
+				if ( args.Count() != 2 ) {
+					SendPlayerMessage(player, "Syntax: /car [TYPE] - Spawn a vehicle near self");
+					return false;
+				}
+				if (args[1] == "offroad") {
 					SpawnCar(player, 0);					
 				}
-				else if (command.Contains("sedanblack")) {
+				else if (args[1] == "sedanblack") {
 					SpawnCar(player, 1);
 				}				
-				else if (command.Contains("sedan")) {
+				else if (args[1] == "sedan") {
 					SpawnCar(player, 2);					
 				}
 				else {
 					SendPlayerMessage(player, "CommandHandler: Car type not found.");
 				}
-				
 				break;
 				
-			case CmdType.TELEPORT:
-				SetPos(player, "4300 30 11200");
+			case "/warp":
+				if ( args.Count() < 4 ) {
+					SendPlayerMessage(player, "Syntax: /warp [X] [Y] [Z] - Teleport to x y z");
+					return false;
+				}
+				string pos = args[1] + " " + args[2] + " " + args[3];
+				
+				SendPlayerMessage(player, pos);
+				
+				SafeSetPos(player, pos);
 				break;
 				
-			case CmdType.PLAYERINFO:
+			case "/stats":
+				if ( args.Count() != 1 ) {
+					SendPlayerMessage(player, "Syntax: /stats");
+					return false;
+				}
 				PlayerInfo(player);
 				break;
 				
-			case CmdType.SPEAK:
-				if (command.Length() < 8) {
-					SendPlayerMessage(player, "Syntax: /say [MESSAGE]");
+			case "/say":
+				if ( args.Count() <= 1 ) {
+					SendPlayerMessage(player, "Syntax: /say [MESSAGE] - Global announcement to all players");
 					return false;
 				}
 				
-				string speakArg = command.Substring( 6, command.Length() - 6 - 1 ); // Last char is ', skip it
-				SendGlobalMessage(speakArg);
+				// Form the message string and send to all players
+				string msg = "";
 				
+				args.Remove(0);
+				foreach (string i : args) {
+					msg = msg + i + " ";
+				}
+				
+				SendGlobalMessage(msg);
 				break;
 				
-			case CmdType.ITEM:
-				if (command.Length() < 9) {
-					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME]");
+			case "/give":
+				if ( args.Count() != 2 ) {
+					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME] - Gives self an item to hands");
 					return false;
 				}
-
-				string itemArg = command.Substring( 7, command.Length() - 7 - 1 );
 				
 				EntityAI item = player.GetHumanInventory().GetEntityInHands();
 				
@@ -237,8 +241,8 @@ class CustomMission: MissionServer
 					return false;
 				}
 				
-				SendPlayerMessage(player, "Spawning item: " + itemArg);
-				item = player.GetHumanInventory().CreateInHands(itemArg);
+				SendPlayerMessage(player, "Spawning item: " + args[1]);
+				item = player.GetHumanInventory().CreateInHands(args[1]);
 				
 				if (item) {
 					item.SetHealth("", "", 100);
@@ -249,42 +253,258 @@ class CustomMission: MissionServer
 				
 				break;
 				
+			case "/here":
+				if ( args.Count() != 2 ) {
+					SendPlayerMessage(player, "Syntax: /here [player] - Moves player to self");
+					return false;
+				}				
+				TeleportPlayer(GetPlayerByAny(args[1]), player);
+				break;
+				
+			case "/there":
+				if ( args.Count() != 2 ) {
+					SendPlayerMessage(player, "Syntax: /there [player] - Moves self to player");
+					return false;
+				}
+				TeleportPlayer(player, GetPlayerByAny(args[1]));
+				break;
+				
+			case "/suicide":
+				if ( args.Count() != 1 ) {
+					SendPlayerMessage(player, "Syntax: /suicide - Commit a suicide");
+					return false;
+				}
+				// Use SteamID here for sake of certainty
+				// We dont want to kill a player that happens to have the same name
+				KillPlayer( player.GetIdentity().GetPlainId() );
+				break;
+
+			case "/kill":
+				if ( args.Count() != 2 ) {
+					SendPlayerMessage(player, "Syntax: /kill [PLAYER] - Kills a player by name or id");
+					return false;
+				}
+				
+				if (!KillPlayer(args[1]))
+					SendPlayerMessage(player, "Error: Could not kill player.");
+					
+				break;
+								
+			case "/help":
+				SendPlayerMessage(player, helpMsg);
+				return false;
+
 			default:
+				SendPlayerMessage(player, "Unknown command!");
+				SendPlayerMessage(player, helpMsg);
 				return false;
 		}
 		
 		return true;
 	}
-	
-	override PlayerBase CreateCharacter(PlayerIdentity identity, vector pos, ParamsReadContext ctx, string characterName)
+
+	void TeleportPlayer(PlayerBase from, PlayerBase to)
 	{
-		// Custom user spawn handling by Steam ID (steamID64)
-
-		const TStringArray ids = {"", "", ""};
+		if (!from) return;
+		if (!to) return;
 		
-		const vector custPos = "6400 0 10300".ToVector();
+		vector toPos = to.GetPosition();
+		toPos[0] = toPos[0] + 10;
+		toPos[1] = toPos[1] + 10;
+		toPos[2] = toPos[2] + 10;
+		
+		from.SetPosition(toPos);
+	}
+	
+	bool KillPlayer(string tag)
+	{
+		PlayerBase p = GetPlayerByAny(tag);
+		
+		if (!p) return false;
+		
+		p.SetHealth("", "", -1);
+		
+		return true;
+	}
+	
 
-		string id = identity.GetPlainId();
+	override void OnClientRespawnEvent(PlayerIdentity identity, PlayerBase player)
+	{
+		super.OnClientRespawnEvent(identity, player);
+	}
+	
+	override void OnEvent(EventType eventTypeId, Param params)
+	{
+		super.OnEvent(eventTypeId, params);
+		
+		switch(eventTypeId)
+		{
+			// Handle user command
+			case ChatMessageEventTypeID:
 
-		bool special = false;
-		foreach (string x : ids) {
-			if (x == id) {
-				special = true;
+			ChatMessageEventParams chatParams;
+			Class.CastTo(chatParams, params);
+			
+			// Remove those stupid ' ' => Substring: x, false, false, quotes = false
+			
+			// Check that input was a command (contains forward slash)
+			string cmd = string.ToString(chatParams.param3, false, false, false);
+			//cmd = cmd.Substring(1, cmd.Length() - 1);
+
+			// command format: /abc def ghi
+			if ( cmd.Get(0) != "/" ) break;
+			
+			// Get sender player name as string
+			string senderName = string.ToString(chatParams.param2, false, false, false);
+			//senderName = senderName.Substring(1, senderName.Length() - 1);
+			
+			// Get sender player object
+			PlayerBase sender = GetAdminPlayerByName(senderName);
+			
+			// If fails to get the message sender, stop
+			if (!sender) {
 				break;
+			}
+			
+			// Check that player has sufficient privileges to execute commands
+			if ( !IsAdmin(sender) ) {
+				SendPlayerMessage(sender, "Sorry, you are not an admin!");
+				break;
+			}
+			
+			SendPlayerMessage(sender, "Command: " + cmd);
+			
+			// Execute specified command
+			if ( Command(sender, cmd) )
+				SendPlayerMessage( sender, "Command executed successfully." );
+			
+			break;
+		}
+	}
+	
+	bool IsAdmin(PlayerBase player)
+	{
+		return m_admins.Find( player.GetIdentity().GetPlainId() ) != -1;
+	}
+	
+	PlayerBase GetAdminPlayerByName(string name)
+	{
+		ref array<Man> players = new array<Man>;
+		GetGame().GetPlayers( players );
+		
+		PlayerBase p;
+		
+		for ( int i = 0; i < players.Count(); ++i )
+		{
+			Class.CastTo(p, players.Get(i));
+
+			if ( p.GetIdentity().GetName() == name && IsAdmin(p) ) {
+				return p;
 			}
 		}
 		
-		// Disable custom spawn handling -> uncomment line below
-		special = false;
+		// Player with given parameter not found
+		return NULL;
+	}
+	
+	// DANGER: Players with same name might get mixed with each other!
+	// If wanted to be certain of the identity, please use another method.
+	PlayerBase GetPlayerByName(string name)
+	{
+		ref array<Man> players = new array<Man>;
+		GetGame().GetPlayers( players );
+		
+		PlayerBase p;
+		
+		for ( int i = 0; i < players.Count(); ++i )
+		{
+			Class.CastTo(p, players.Get(i));
 
-		Entity playerEnt;
+			if ( p.GetIdentity().GetName() == name ) {
+				return p;
+			}
+		}
+		
+		// Player with given parameter not found
+		return NULL;
+	}
+	
+	PlayerBase GetPlayerById(string id)
+	{
+		ref array<Man> players = new array<Man>;
+		GetGame().GetPlayers( players );
+		
+		PlayerBase p;
+		
+		for ( int i = 0; i < players.Count(); ++i )
+		{
+			Class.CastTo(p, players.Get(i));
 
-		if (special) {
-			playerEnt = GetGame().CreatePlayer(identity, characterName, custPos, 0, "NONE");
+			if ( p.GetIdentity().GetPlainId() == id ) {
+				return p;
+			}
 		}
-		else {
-			playerEnt = GetGame().CreatePlayer(identity, characterName, pos, 0, "NONE");//Creates random player
+		
+		// Player with given parameter not found
+		return NULL;
+	}
+	
+	// Get player object by any means (name or id)
+	PlayerBase GetPlayerByAny(string tag)
+	{
+		PlayerBase p;
+		
+		p = GetPlayerById(tag);
+		
+		if (!p) {
+			p = GetPlayerByName(tag);
 		}
+		
+		return p;
+	}
+	
+	void SendGlobalMessage(string message)	
+	{
+		ref array<Man> players = new array<Man>;
+		GetGame().GetPlayers( players );
+		
+		for ( int i = 0; i < players.Count(); ++i )
+		{
+			Man player = players.Get(i);
+			if ( player )
+				SendPlayerMessage(player, message);
+		}
+	}
+	
+	void SendPlayerMessage(PlayerBase player, string message)	
+	{
+		Param1<string> Msgparam;
+		Msgparam = new Param1<string>(message);
+		GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, Msgparam, true, player.GetIdentity());
+	}
+	
+	void MySplit(string text, string delim, out TStringArray list)
+	{
+		string temp = text + delim;
+		string word = "";
+		
+		for (int i = 0; i < temp.Length(); i++ )
+		{
+			string x = temp.Get(i);
+			
+			if ( x != delim ) {
+				word = word + x;
+			}
+			else {
+				list.Insert(word);
+				word = "";
+			}
+		}
+	}
+	
+	override PlayerBase CreateCharacter(PlayerIdentity identity, vector pos, ParamsReadContext ctx, string characterName)
+	{
+		Entity playerEnt = GetGame().CreatePlayer(identity, characterName, pos, 0, "NONE");//Creates random player
 
 		Class.CastTo(m_player, playerEnt);
 
@@ -318,121 +538,6 @@ class CustomMission: MissionServer
 			itemEnt = itemTop.GetInventory().CreateInInventory("TetracyclineAntibiotics");
 			itemEnt.SetHealth("","",100);
 		}
-	}
-
-	override void OnClientRespawnEvent(PlayerIdentity identity, PlayerBase player)
-	{
-		super.OnClientRespawnEvent(identity, player);
-	}
-	
-	override void OnEvent(EventType eventTypeId, Param params)
-	{
-		super.OnEvent(eventTypeId, params);
-		
-		PlayerIdentity identity;
-		PlayerBase player;
-		
-		switch(eventTypeId)
-		{
-		case LoginStatusEventTypeID:
-			break;
-			
-		case ClientNewEventTypeID:
-			ClientNewEventParams newParams;
-			Class.CastTo(newParams, params);
-			
-			player = OnClientNewEvent(newParams.param1, newParams.param2, newParams.param3);
-			identity = newParams.param1;
-			
-			if (!player)
-			{
-				Debug.Log("ClientNewEvent: Player is empty");
-				return;
-			}
-			
-			identity = newParams.param1;
-			
-			string name = identity.GetName();
-			SendGlobalMessage("Player " + name + " joined.");
-			
-			break;
-			
-		case ChatMessageEventTypeID:
-			ChatMessageEventParams chatParams;
-			Class.CastTo(chatParams, params);
-			
-			// Check that input was a command (contains forward slash)
-			string cmd = string.ToString(chatParams.param3);
-			if ( !cmd.Contains("/") ) break;
-			
-			string senderName = string.ToString(chatParams.param2);
-			
-			// Get sender player object
-			PlayerBase sender = GetPlayerByName(senderName);
-			
-			// If fails to get the message sender, stop
-			if (!sender) {
-				break;
-			}
-			
-			// Check that player has sufficient privileges to execute commands
-			if ( !IsAdmin(sender) ) {
-				SendPlayerMessage(sender, "Sorry, you are not an admin!");
-				break;
-			}
-			
-			// Execute specified command
-			if ( Command(sender, cmd) )
-				SendPlayerMessage( sender, "Command executed successfully." );
-			
-			break;
-		}
-	}
-	
-	bool IsAdmin(PlayerBase player)
-	{
-		return m_admins.Find( player.GetIdentity().GetPlainId() ) != -1;
-	}
-	
-	PlayerBase GetPlayerByName(string name)
-	{
-		ref array<Man> players = new array<Man>;
-		GetGame().GetPlayers( players );
-		
-		PlayerBase p;
-		
-		for ( int i = 0; i < players.Count(); ++i )
-		{
-			Man player = players.Get(i);
-			Class.CastTo(p, player);
-
-			if ( "'" + p.GetIdentity().GetName() + "'" == name && IsAdmin(p) ) {
-				return p;
-			}
-		}
-		
-		// Player with given name not found
-		return NULL;
-	}
-	
-	void SendGlobalMessage(string message)	
-	{
-		ref array<Man> players = new array<Man>;
-		GetGame().GetPlayers( players );
-		
-		for ( int i = 0; i < players.Count(); ++i )
-		{
-			Man player = players.Get(i);
-			if( player )
-				SendPlayerMessage(player, message);
-		}
-	}
-	
-	void SendPlayerMessage(PlayerBase player, string message)	
-	{
-		Param1<string> Msgparam;
-		Msgparam = new Param1<string>(message);
-		GetGame().RPCSingleParam(player, ERPCs.RPC_USER_ACTION_MESSAGE, Msgparam, true, player.GetIdentity());
 	}
 };
 
