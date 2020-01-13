@@ -84,8 +84,27 @@ class CustomMission: MissionServer
 				
 				success = true;
 				break;
-				
+			
 			case 1:
+				// Spawn and build the car
+				car = GetGame().CreateObject("CivilianSedan", pos);
+				car.GetInventory().CreateAttachment("CivSedanHood");
+				car.GetInventory().CreateAttachment("CivSedanTrunk");
+				car.GetInventory().CreateAttachment("CivSedanDoors_Driver");
+				car.GetInventory().CreateAttachment("CivSedanDoors_CoDriver");
+				car.GetInventory().CreateAttachment("CivSedanDoors_BackLeft");
+				car.GetInventory().CreateAttachment("CivSedanDoors_BackRight");
+				car.GetInventory().CreateAttachment("CivSedanWheel");
+				car.GetInventory().CreateAttachment("CivSedanWheel");
+				car.GetInventory().CreateAttachment("CivSedanWheel");
+				car.GetInventory().CreateAttachment("CivSedanWheel");
+				
+				SendPlayerMessage(player, "CivSedan spawned.");
+				
+				success = true;
+				break;
+				
+			case 2:
 				// Spawn and build the car
 				car = GetGame().CreateObject("CivilianSedan_Black", pos);
 				car.GetInventory().CreateAttachment("CivSedanHood_Black");
@@ -103,12 +122,47 @@ class CustomMission: MissionServer
 				
 				success = true;
 				break;
-			
-			case 2:
+				
+			case 3:
+				// Spawn and build the car
+				car = GetGame().CreateObject("Sedan_02", pos);
+				car.GetInventory().CreateAttachment("Sedan_02_Hood");
+				car.GetInventory().CreateAttachment("Sedan_02_Trunk");
+				car.GetInventory().CreateAttachment("Sedan_02_Door_1_1");
+				car.GetInventory().CreateAttachment("Sedan_02_Door_1_2");
+				car.GetInventory().CreateAttachment("Sedan_02_Door_2_1");
+				car.GetInventory().CreateAttachment("Sedan_02_Door_2_2");
+				car.GetInventory().CreateAttachment("Sedan_02_Wheel");
+				car.GetInventory().CreateAttachment("Sedan_02_Wheel");
+				car.GetInventory().CreateAttachment("Sedan_02_Wheel");
+				car.GetInventory().CreateAttachment("Sedan_02_Wheel");
+				
+				SendPlayerMessage(player, "Sedan_02 spawned.");
+				
+				success = true;
+				break;
+
+			case 4:
+				// Spawn and build the car
+				car = GetGame().CreateObject("Hatchback_02", pos);
+				car.GetInventory().CreateAttachment("Hatchback_02_Hood");
+				car.GetInventory().CreateAttachment("Hatchback_02_Trunk");
+				car.GetInventory().CreateAttachment("Hatchback_02_Door_1_1");
+				car.GetInventory().CreateAttachment("Hatchback_02_Door_1_2");
+				car.GetInventory().CreateAttachment("Hatchback_02_Door_2_1");
+				car.GetInventory().CreateAttachment("Hatchback_02_Door_2_2");
+				car.GetInventory().CreateAttachment("Hatchback_02_Wheel");
+				car.GetInventory().CreateAttachment("Hatchback_02_Wheel");
+				car.GetInventory().CreateAttachment("Hatchback_02_Wheel");
+				car.GetInventory().CreateAttachment("Hatchback_02_Wheel");
+				
+				SendPlayerMessage(player, "Hatchback_02 spawned.");
+				
+				success = true;
 				break;
 				
 			default:
-				SendPlayerMessage(player, "SpawnCar: Car type not found.");
+				SendPlayerMessage(player, "ERROR: SpawnCar: Car type invalid.");
 				break;
 		}
 		
@@ -156,7 +210,12 @@ class CustomMission: MissionServer
 		{
 			Class.CastTo(p, players.Get(i));
 			
-			string info = "Player {" + string.ToString(i) + "}" + "  " + "Name: " + p.GetIdentity().GetName() + "  " + "Pos: " + p.GetPosition().ToString() + "  " + "Health: " + string.ToString(p.GetHealth()) + "  " + "SteamID64: " + p.GetIdentity().GetPlainId();
+			string info = "Player {" + string.ToString(i, false, false, false) + "}";
+			info = info + "  " + "Name: " + p.GetIdentity().GetName();
+			info = info + "  " + "Pos: " + p.GetPosition().ToString();
+			info = info	+ "  " + "Health: " + string.ToString(p.GetHealth("GlobalHealth", "Health"));
+			info = info + "  " + "Blood: " + p.GetHealth("GlobalHealth", "Blood");
+			info = info + "  " + "SteamID64: " + p.GetIdentity().GetPlainId();
 
 			SendPlayerMessage(player, info);
 		}
@@ -164,7 +223,8 @@ class CustomMission: MissionServer
 	
 	bool Command(PlayerBase player, string command)
 	{
-		const string helpMsg = "Commands: /help /car /warp /kill /give /say /stats /suicide /here /there";
+		const string helpMsg = "Available commands: /help /car /warp /kill /give /say /info /suicide /here /there";
+		const string carTypesMsg = "Types: offroad, olga, olgablack, sarka, gunter";
 		
 		// Split command message into args
 		TStringArray args = new TStringArray;
@@ -175,19 +235,30 @@ class CustomMission: MissionServer
 			case "/car":
 				if ( args.Count() != 2 ) {
 					SendPlayerMessage(player, "Syntax: /car [TYPE] - Spawn a vehicle near self");
+					SendPlayerMessage(player, carTypesMsg);
 					return false;
 				}
 				if (args[1] == "offroad") {
 					SpawnCar(player, 0);					
 				}
-				else if (args[1] == "sedanblack") {
+				else if (args[1] == "olga") {
 					SpawnCar(player, 1);
-				}				
-				else if (args[1] == "sedan") {
+				}
+				else if (args[1] == "olgablack") {
 					SpawnCar(player, 2);					
 				}
+				else if (args[1] == "sarka") {
+					SpawnCar(player, 3);					
+				}
+				else if (args[1] == "gunter") {
+					SpawnCar(player, 4);					
+				}
+				else if (args[1] == "bus") {
+					SendPlayerMessage(player, "Currently not implemented, sorry!");					
+				}
 				else {
-					SendPlayerMessage(player, "CommandHandler: Car type not found.");
+					SendPlayerMessage(player, "Car type not found.");
+					SendPlayerMessage(player, carTypesMsg);
 				}
 				break;
 				
@@ -203,9 +274,9 @@ class CustomMission: MissionServer
 				SafeSetPos(player, pos);
 				break;
 				
-			case "/stats":
+			case "/info":
 				if ( args.Count() != 1 ) {
-					SendPlayerMessage(player, "Syntax: /stats");
+					SendPlayerMessage(player, "Syntax: /info - Get information about players on the server");
 					return false;
 				}
 				PlayerInfo(player);
@@ -218,12 +289,7 @@ class CustomMission: MissionServer
 				}
 				
 				// Form the message string and send to all players
-				string msg = "";
-				
-				args.Remove(0);
-				foreach (string i : args) {
-					msg = msg + i + " ";
-				}
+				string msg = command.Substring( 5, command.Length() - 5 );
 				
 				SendGlobalMessage(msg);
 				break;
@@ -244,10 +310,7 @@ class CustomMission: MissionServer
 				SendPlayerMessage(player, "Spawning item: " + args[1]);
 				item = player.GetHumanInventory().CreateInHands(args[1]);
 				
-				if (item) {
-					item.SetHealth("", "", 100);
-				}
-				else {
+				if (!item) {
 					SendPlayerMessage(player, "Could not create item.");
 				}
 				
@@ -349,14 +412,12 @@ class CustomMission: MissionServer
 			
 			// Check that input was a command (contains forward slash)
 			string cmd = string.ToString(chatParams.param3, false, false, false);
-			//cmd = cmd.Substring(1, cmd.Length() - 1);
 
 			// command format: /abc def ghi
 			if ( cmd.Get(0) != "/" ) break;
 			
 			// Get sender player name as string
 			string senderName = string.ToString(chatParams.param2, false, false, false);
-			//senderName = senderName.Substring(1, senderName.Length() - 1);
 			
 			// Get sender player object
 			PlayerBase sender = GetAdminPlayerByName(senderName);
@@ -371,12 +432,9 @@ class CustomMission: MissionServer
 				SendPlayerMessage(sender, "Sorry, you are not an admin!");
 				break;
 			}
-			
-			SendPlayerMessage(sender, "Command: " + cmd);
-			
+
 			// Execute specified command
-			if ( Command(sender, cmd) )
-				SendPlayerMessage( sender, "Command executed successfully." );
+			Command(sender, cmd);
 			
 			break;
 		}
@@ -527,16 +585,10 @@ class CustomMission: MissionServer
 			
 			if ( Class.CastTo(itemBs, itemEnt ) )
 				itemBs.SetQuantity(6);
-			itemEnt.SetHealth("","",100);
 
 			itemEnt = player.GetInventory().CreateInInventory("TunaCan");
-			itemEnt.SetHealth("","",100);
-			
 			itemEnt = itemTop.GetInventory().CreateInInventory("VitaminBottle");
-			itemEnt.SetHealth("","",100);
-			
 			itemEnt = itemTop.GetInventory().CreateInInventory("TetracyclineAntibiotics");
-			itemEnt.SetHealth("","",100);
 		}
 	}
 };
