@@ -191,7 +191,10 @@ class CustomMission: MissionServer
 		// Safe conversion
 		vector p = pos.ToVector();
 		
+		// Check that position is a valid coordinate
 		if (p) {
+			// Get safe surface value for Y coordinate in that position
+			p[1] = GetGame().SurfaceY(p[0], p[2]);
 			player.SetPosition(p);
 			return;
 		}
@@ -224,7 +227,7 @@ class CustomMission: MissionServer
 	bool Command(PlayerBase player, string command)
 	{
 		const string helpMsg = "Available commands: /help /car /warp /kill /give /say /info /suicide /here /there";
-		const string carTypesMsg = "Types: offroad, olga, olgablack, sarka, gunter";
+		const string carTypesMsg = "Available types: offroad, olga, olgablack, sarka, gunter";
 		
 		// Split command message into args
 		TStringArray args = new TStringArray;
@@ -238,23 +241,27 @@ class CustomMission: MissionServer
 					SendPlayerMessage(player, carTypesMsg);
 					return false;
 				}
-				if (args[1] == "offroad") {
-					SpawnCar(player, 0);					
+				
+				string carType = args[1];
+				carType.ToLower();
+				
+				if (carType == "offroad") {
+					SpawnCar(player, 0);
 				}
-				else if (args[1] == "olga") {
+				else if (carType == "olga") {
 					SpawnCar(player, 1);
 				}
-				else if (args[1] == "olgablack") {
-					SpawnCar(player, 2);					
+				else if (carType == "olgablack") {
+					SpawnCar(player, 2);
 				}
-				else if (args[1] == "sarka") {
-					SpawnCar(player, 3);					
+				else if (carType == "sarka") {
+					SpawnCar(player, 3);
 				}
-				else if (args[1] == "gunter") {
-					SpawnCar(player, 4);					
+				else if (carType == "gunter") {
+					SpawnCar(player, 4);
 				}
-				else if (args[1] == "bus") {
-					SendPlayerMessage(player, "Currently not implemented, sorry!");					
+				else if (carType == "bus") {
+					SendPlayerMessage(player, "Currently not implemented, sorry!");
 				}
 				else {
 					SendPlayerMessage(player, "Car type not found.");
@@ -263,15 +270,22 @@ class CustomMission: MissionServer
 				break;
 				
 			case "/warp":
-				if ( args.Count() < 4 ) {
-					SendPlayerMessage(player, "Syntax: /warp [X] [Y] [Z] - Teleport to x y z");
+				if ( args.Count() < 3 ) {
+				SendPlayerMessage(player, "Syntax: /warp [X] [Z] - Teleport to [X, Z]");
 					return false;
 				}
-				string pos = args[1] + " " + args[2] + " " + args[3];
-				
-				SendPlayerMessage(player, pos);
-				
+				string pos = args[1] + " " + "0" + " " + args[2];
 				SafeSetPos(player, pos);
+				SendPlayerMessage(player, "Teleported to: " + pos);
+				break;
+				
+			case "/gear":
+				if ( args.Count() != 2 ) {
+					SendPlayerMessage(player, "Syntax: /gear [TYPE] - Spawn item loadout to self");
+					return false;
+				}
+				SpawnGear(player, args[1]);
+				SendPlayerMessage(player, "Gear spawned.");
 				break;
 				
 			case "/info":
@@ -308,7 +322,7 @@ class CustomMission: MissionServer
 				}
 				
 				SendPlayerMessage(player, "Spawning item: " + args[1]);
-				item = player.GetHumanInventory().CreateInHands(args[1]);
+				item = player.SpawnEntityOnGroundPos(args[1], player.GetPosition());
 				
 				if (!item) {
 					SendPlayerMessage(player, "Could not create item.");
@@ -338,13 +352,13 @@ class CustomMission: MissionServer
 					return false;
 				}
 				// Use SteamID here for sake of certainty
-				// We dont want to kill a player that happens to have the same name
+				// We dont want to kill a random player that happens to have the same name
 				KillPlayer( player.GetIdentity().GetPlainId() );
 				break;
 
 			case "/kill":
 				if ( args.Count() != 2 ) {
-					SendPlayerMessage(player, "Syntax: /kill [PLAYER] - Kills a player by name or id");
+					SendPlayerMessage(player, "Syntax: /kill [PLAYER] - Kills a player by Name or SteamID");
 					return false;
 				}
 				
@@ -365,6 +379,123 @@ class CustomMission: MissionServer
 		
 		return true;
 	}
+	
+	void SpawnGear(PlayerBase player, string type) 
+	{
+		type.ToLower();
+		
+		vector pos = player.GetPosition();
+		pos[0] = pos[0] + 2;
+		pos[1] = pos[1] + 2;
+		pos[2] = pos[2] + 2;
+		
+		// DONT spawn a mag as attachment, is buggy ingame, spawn mags in ground instead
+		EntityAI item;
+		EntityAI subItem;
+
+		switch (type)
+		{
+			case "milgear":
+				// Head
+				item = player.SpawnEntityOnGroundPos("Mich2001Helmet", pos);
+				
+				subItem = item.GetInventory().CreateAttachment("NVGoggles");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				subItem = item.GetInventory().CreateAttachment("UniversalLight");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				player.SpawnEntityOnGroundPos("GP5GasMask", pos);
+
+				// item = player.SpawnEntityOnGroundPos("GorkaHelmet", pos);
+				// item.GetInventory().CreateAttachment("GorkaHelmetVisor", pos);
+				
+				// Body
+				player.SpawnEntityOnGroundPos("TTsKOJacket_Camo", pos);
+				player.SpawnEntityOnGroundPos("TTSKOPants", pos);
+				player.SpawnEntityOnGroundPos("HighCapacityVest_Olive", pos);
+				player.SpawnEntityOnGroundPos("OMNOGloves_Gray", pos);
+				
+				// Waist
+				item = player.SpawnEntityOnGroundPos("MilitaryBelt", pos);
+				item.GetInventory().CreateAttachment("Canteen");
+				item.GetInventory().CreateAttachment("PlateCarrierHolster");
+				
+				subItem = item.GetInventory().CreateAttachment("NylonKnifeSheath");
+				subItem.GetInventory().CreateAttachment("CombatKnife");
+				
+				// Legs
+				item = player.SpawnEntityOnGroundPos("MilitaryBoots_Black", pos);
+				item.GetInventory().CreateAttachment("CombatKnife");
+				
+				// Back
+				player.SpawnEntityOnGroundPos("AssaultBag_Ttsko", pos);
+
+				break;
+			
+			case "milcloth":
+				break;
+				
+			case: "ghillie":
+				break;
+			
+			case "m4":
+				item = player.SpawnEntityOnGroundPos("M4A1", pos);
+				
+				item.GetInventory().CreateAttachment("M4_Suppressor");
+				item.GetInventory().CreateAttachment("M4_OEBttstck");
+				item.GetInventory().CreateAttachment("M4_RISHndgrd");
+				
+				subItem = item.GetInventory().CreateAttachment("ReflexOptic");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+		
+				subItem = item.GetInventory().CreateAttachment("UniversalLight");
+				subItem.GetInventory().CreateAttachment("Battery9V");			
+				
+				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
+				
+				player.SpawnEntityOnGroundPos("ACOGOptic", pos);
+				
+				break;
+				
+			case "akm":
+				item = player.SpawnEntityOnGroundPos("AKM", pos);
+				
+				item.GetInventory().CreateAttachment("AK_Suppressor");
+				item.GetInventory().CreateAttachment("AK_WoodBttstck");
+				item.GetInventory().CreateAttachment("AK_RailHndgrd");
+				
+				subItem = item.GetInventory().CreateAttachment("KobraOptic");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				subItem = item.GetInventory().CreateAttachment("UniversalLight");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				player.SpawnEntityOnGroundPos("Mag_AKM_30Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_AKM_30Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_AKM_30Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_AKM_Drum75Rnd", pos);
+				
+				player.SpawnEntityOnGroundPos("PSO1Optic", pos);
+				
+				break;
+			
+			case "nv":
+				item = player.SpawnEntityOnGroundPos("NVGHeadstrap", pos);
+				
+				subItem = item.GetInventory().CreateAttachment("NVGoggles");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				break;
+			
+			default:
+				SendPlayerMessage(player, "Invalid type.");
+				SendPlayerMessage(player, "Available types: milcloth, m4, akm");
+		}
+	}
 
 	void TeleportPlayer(PlayerBase from, PlayerBase to)
 	{
@@ -372,11 +503,14 @@ class CustomMission: MissionServer
 		if (!to) return;
 		
 		vector toPos = to.GetPosition();
-		toPos[0] = toPos[0] + 10;
-		toPos[1] = toPos[1] + 10;
-		toPos[2] = toPos[2] + 10;
+
+		float pos_x = toPos[0] + 10;
+		float pos_z = toPos[2] + 10;
+		float pos_y = GetGame().SurfaceY(pos_x, pos_z) + 5;
 		
-		from.SetPosition(toPos);
+		vector pos = Vector(pos_x, pos_y, pos_z);
+		
+		from.SetPosition(pos);
 	}
 	
 	bool KillPlayer(string tag)
