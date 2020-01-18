@@ -532,46 +532,50 @@ class CustomMission: MissionServer
 	
 	override void OnEvent(EventType eventTypeId, Param params)
 	{
-		super.OnEvent(eventTypeId, params);
-		
 		switch(eventTypeId)
 		{
 			// Handle user command
 			case ChatMessageEventTypeID:
 
-			ChatMessageEventParams chatParams;
-			Class.CastTo(chatParams, params);
-			
-			// Remove those stupid ' ' => Substring: x, false, false, quotes = false
-			
-			// Check that input was a command (contains forward slash)
-			string cmd = string.ToString(chatParams.param3, false, false, false);
+				ChatMessageEventParams chatParams;
+				Class.CastTo(chatParams, params);
+				
+				// Remove those stupid ' ' => Substring: x, false, false, quotes = false
+				
+				// Check that input was a command (contains forward slash)
+				string cmd = string.ToString(chatParams.param3, false, false, false);
 
-			// command format: /abc def ghi
-			if ( cmd.Get(0) != "/" ) break;
-			
-			// Get sender player name as string
-			string senderName = string.ToString(chatParams.param2, false, false, false);
-			
-			// Get sender player object
-			PlayerBase sender = GetAdminPlayerByName(senderName);
-			
-			// If fails to get the message sender, stop
-			if (!sender) {
-				break;
-			}
-			
-			// Check that player has sufficient privileges to execute commands
-			if ( !IsAdmin(sender) ) {
-				SendPlayerMessage(sender, "Sorry, you are not an admin!");
-				break;
-			}
+				// command format: /abc def ghi
+				// if not command, is normal chat message
+				if ( cmd.Get(0) != "/" ) break;
+				
+				// Get sender player name as string
+				string senderName = string.ToString(chatParams.param2, false, false, false);
+				
+				// Get sender player object
+				PlayerBase sender = GetAdminPlayerByName(senderName);
+				
+				// If fails to get the message sender, stop
+				if (!sender) {
+					return;
+				}
+				
+				// Check that player has sufficient privileges to execute commands
+				if ( !IsAdmin(sender) ) {
+					SendPlayerMessage(sender, "Sorry, you are not an admin!");
+					return;
+				}
 
-			// Execute specified command
-			Command(sender, cmd);
-			
-			break;
+				// Execute specified command
+				Command(sender, cmd);
+				
+				// Return after execution instead of breaking so the command is not exposed to other players nearby
+				return;
 		}
+		
+		// Unless chat command was executed, operate normally
+		// Call super class event handler to handle other events
+		super.OnEvent(eventTypeId, params);
 	}
 	
 	bool IsAdmin(PlayerBase player)
