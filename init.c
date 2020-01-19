@@ -163,7 +163,6 @@ class CustomMission: MissionServer
 				
 			default:
 				SendPlayerMessage(player, "ERROR: SpawnCar: Car type invalid.");
-				break;
 		}
 		
 		// If a car was spawned, do some common configuration
@@ -313,19 +312,13 @@ class CustomMission: MissionServer
 					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME] - Gives self an item to hands");
 					return false;
 				}
-				
-				EntityAI item = player.GetHumanInventory().GetEntityInHands();
-				
-				if (item) {
-					SendPlayerMessage(player, "Error: hands not empty.");
-					return false;
-				}
-				
+
 				SendPlayerMessage(player, "Spawning item: " + args[1]);
-				item = player.SpawnEntityOnGroundPos(args[1], player.GetPosition());
+				
+				EntityAI item = player.SpawnEntityOnGroundPos(args[1], player.GetPosition());
 				
 				if (!item) {
-					SendPlayerMessage(player, "Could not create item.");
+					SendPlayerMessage(player, "ERROR: Could not create item.");
 				}
 				
 				break;
@@ -351,9 +344,11 @@ class CustomMission: MissionServer
 					SendPlayerMessage(player, "Syntax: /suicide - Commit a suicide");
 					return false;
 				}
+				
 				// Use SteamID here for sake of certainty
-				// We dont want to kill a random player that happens to have the same name
-				KillPlayer( player.GetIdentity().GetPlainId() );
+				if (!KillPlayer( player.GetIdentity().GetPlainId() ))
+					SendPlayerMessage(player, "Could not commit suicide.");
+				
 				break;
 
 			case "/kill":
@@ -406,14 +401,15 @@ class CustomMission: MissionServer
 				subItem.GetInventory().CreateAttachment("Battery9V");
 				
 				player.SpawnEntityOnGroundPos("GP5GasMask", pos);
-
-				// item = player.SpawnEntityOnGroundPos("GorkaHelmet", pos);
-				// item.GetInventory().CreateAttachment("GorkaHelmetVisor", pos);
+				
+				// Vest
+				item = player.SpawnEntityOnGroundPos("SmershVest", pos);
+				item.GetInventory().CreateAttachment("SmershBag");
 				
 				// Body
 				player.SpawnEntityOnGroundPos("TTsKOJacket_Camo", pos);
 				player.SpawnEntityOnGroundPos("TTSKOPants", pos);
-				player.SpawnEntityOnGroundPos("HighCapacityVest_Olive", pos);
+				player.SpawnEntityOnGroundPos("UKAssVest_Khaki", pos);
 				player.SpawnEntityOnGroundPos("OMNOGloves_Gray", pos);
 				
 				// Waist
@@ -429,14 +425,31 @@ class CustomMission: MissionServer
 				item.GetInventory().CreateAttachment("CombatKnife");
 				
 				// Back
-				player.SpawnEntityOnGroundPos("AssaultBag_Ttsko", pos);
+				player.SpawnEntityOnGroundPos("AliceBag_Camo", pos);
 
 				break;
-			
-			case "milcloth":
+
+			case "ghillie":
+				player.SpawnEntityOnGroundPos("GhillieAtt_Woodland", pos);
+				player.SpawnEntityOnGroundPos("GhillieBushrag_Woodland", pos);
+				player.SpawnEntityOnGroundPos("GhillieHood_Woodland", pos);
+				player.SpawnEntityOnGroundPos("GhillieSuit_Woodland", pos);
+				player.SpawnEntityOnGroundPos("GhillieTop_Woodland", pos);
+				
 				break;
 				
-			case: "ghillie":
+			case "svd":
+				item = player.SpawnEntityOnGroundPos("SVD", pos);
+				
+				item.GetInventory().CreateAttachment("AK_Suppressor");
+				
+				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
+				
+				item = player.SpawnEntityOnGroundPos("PSO1Optic", pos);
+				item.GetInventory().CreateAttachment("Battery9V");
+				
 				break;
 			
 			case "m4":
@@ -450,9 +463,8 @@ class CustomMission: MissionServer
 				subItem.GetInventory().CreateAttachment("Battery9V");
 		
 				subItem = item.GetInventory().CreateAttachment("UniversalLight");
-				subItem.GetInventory().CreateAttachment("Battery9V");			
+				subItem.GetInventory().CreateAttachment("Battery9V");
 				
-				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_STANAG_30Rnd", pos);
@@ -474,12 +486,29 @@ class CustomMission: MissionServer
 				subItem = item.GetInventory().CreateAttachment("UniversalLight");
 				subItem.GetInventory().CreateAttachment("Battery9V");
 				
-				player.SpawnEntityOnGroundPos("Mag_AKM_30Rnd", pos);
+				item = player.SpawnEntityOnGroundPos("PSO1Optic", pos);
+				item.GetInventory().CreateAttachment("Battery9V");
+
 				player.SpawnEntityOnGroundPos("Mag_AKM_30Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_AKM_30Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_AKM_Drum75Rnd", pos);
+
+				break;
+			
+			case "fx45":
+				item = player.SpawnEntityOnGroundPos("FNX45", pos);
 				
-				player.SpawnEntityOnGroundPos("PSO1Optic", pos);
+				item.GetInventory().CreateAttachment("PistolSuppressor");
+				
+				subItem = item.GetInventory().CreateAttachment("FNP45_MRDSOptic");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				subItem = item.GetInventory().CreateAttachment("TLRLight");
+				subItem.GetInventory().CreateAttachment("Battery9V");
+				
+				player.SpawnEntityOnGroundPos("Mag_FNX45_15Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_FNX45_15Rnd", pos);
+				player.SpawnEntityOnGroundPos("Mag_FNX45_15Rnd", pos);
 				
 				break;
 			
@@ -493,7 +522,7 @@ class CustomMission: MissionServer
 			
 			default:
 				SendPlayerMessage(player, "Invalid type.");
-				SendPlayerMessage(player, "Available types: milcloth, m4, akm");
+				SendPlayerMessage(player, "Available types: milgear, ghillie, nv, svd, m4, akm, fx45");
 		}
 	}
 
@@ -553,7 +582,7 @@ class CustomMission: MissionServer
 				string senderName = string.ToString(chatParams.param2, false, false, false);
 				
 				// Get sender player object
-				PlayerBase sender = GetAdminPlayerByName(senderName);
+				PlayerBase sender = GetPlayerByName(senderName);
 				
 				// If fails to get the message sender, stop
 				if (!sender) {
@@ -582,29 +611,7 @@ class CustomMission: MissionServer
 	{
 		return m_admins.Find( player.GetIdentity().GetPlainId() ) != -1;
 	}
-	
-	PlayerBase GetAdminPlayerByName(string name)
-	{
-		ref array<Man> players = new array<Man>;
-		GetGame().GetPlayers( players );
-		
-		PlayerBase p;
-		
-		for ( int i = 0; i < players.Count(); ++i )
-		{
-			Class.CastTo(p, players.Get(i));
 
-			if ( p.GetIdentity().GetName() == name && IsAdmin(p) ) {
-				return p;
-			}
-		}
-		
-		// Player with given parameter not found
-		return NULL;
-	}
-	
-	// DANGER: Players with same name might get mixed with each other!
-	// If wanted to be certain of the identity, please use another method.
 	PlayerBase GetPlayerByName(string name)
 	{
 		ref array<Man> players = new array<Man>;
