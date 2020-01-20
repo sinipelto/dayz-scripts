@@ -43,14 +43,62 @@ class CustomMission: MissionServer
 {
 	// SteamIDs of all admin players stored here
 	private ref TStringArray m_admins;
-		
+	
+	// Players that have God Mode enabled, listed here
+	private ref TStringArray m_gods;
+	
 	override void OnInit()
 	{
 		super.OnInit();
 		
-		// Insert admin IDs here
+		// Initialize needed arrays here
 		m_admins = new TStringArray;
-		m_admins.Insert("123");
+		m_gods = new TStringArray;
+		
+		LoadAdmins();
+	}
+	
+	void LoadAdmins()
+	{
+		string path = "$profile:admins.txt";
+		
+		FileHandle file = OpenFile(path, FileMode.READ);
+		
+		// If file doesnt exist, create it
+		if ( file == 0 ) {
+			file = OpenFile(path, FileMode.WRITE);
+			
+			FPrintln(file, "// This file contains SteamID64 of all server admins. Add them below.");
+			FPrintln(file, "// Line starting with // means a comment line.");
+			
+			CloseFile(file);
+			return;
+		}
+		
+		string line;
+		
+		while ( FGets( file, line ) > 0 )
+		{
+			if (line.Length() < 2) continue;
+			if (line.Get(0) + line.Get(1) == "//") continue;
+			
+			m_admins.Insert(line);
+		}
+		
+		CloseFile(file);
+	}
+	
+	void GodMode(PlayerBase player)
+	{
+		// If player is not god, do nothing
+		if (m_gods.Find( player.GetIdentity().GetPlainId() ) == -1) {
+			return;
+		}
+		
+		// Set all health statuses to maximum
+		player.SetHealth("GlobalHealth", "Blood", player.GetMaxHealth("GlobalHealth", "Blood"));
+		player.SetHealth("GlobalHealth", "Health", player.GetMaxHealth("GlobalHealth", "Health"));
+		player.SetHealth("GlobalHealth", "Shock", player.GetMaxHealth("GlobalHealth", "Shock"));
 	}
 	
 	void SpawnCar(PlayerBase player, int type)
@@ -58,9 +106,9 @@ class CustomMission: MissionServer
 
 		// Set car pos near player
 		vector pos = player.GetPosition();
-		pos[0] = pos[0] + 5;
-		pos[1] = pos[1] + 5;
-		pos[2] = pos[2] + 5;
+		pos[0] = pos[0] + 3;
+		pos[1] = pos[1] + 3;
+		pos[2] = pos[2] + 3;
 
 		bool success = false;
 		
@@ -296,7 +344,7 @@ class CustomMission: MissionServer
 				break;
 				
 			case "/say":
-				if ( args.Count() <= 1 ) {
+				if ( args.Count() < 2 ) {
 					SendPlayerMessage(player, "Syntax: /say [MESSAGE] - Global announcement to all players");
 					return false;
 				}
@@ -305,39 +353,119 @@ class CustomMission: MissionServer
 				string msg = command.Substring( 5, command.Length() - 5 );
 				
 				SendGlobalMessage(msg);
+				
+				break;
+				
+			case "/spawn":
+				break;
+				
+			case "/god":
+				if ( args.Count() < 2 ) {
+					SendPlayerMessage(player, "Syntax: /god [0-1] - Enable or disable semi-god mode");
+					return false;
+				}
+				
+				int setGod = args[1].ToInt();
+				
+				// Add player to gods, call godmode function every sec
+				if (setGod == 1) {
+					m_gods.Insert(player.GetIdentity().GetPlainId());
+					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.GodMode, 1000, true, player);
+					SendPlayerMessage(player, "Godmode enabled.");
+
+				}
+				// Do vice versa
+				else if (setGod == 0) {
+					int godIdx = m_gods.Find(player.GetIdentity().GetPlainId());
+					if (godIdx != -1) m_gods.Remove(godIdx);
+					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.GodMode);
+					SendPlayerMessage(player, "Godmode disabled.");
+				}
+				else {
+					SendPlayerMessage(player, "ERROR: Invalid argument given. Argument: 0-1");
+					return false;
+				}
+				
 				break;
 				
 			case "/give":
-				if ( args.Count() != 2 ) {
-					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME] - Gives self an item to hands");
+				if ( args.Count() < 2 ) {
+					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME] (AMOUNT) - Gives self an item to hands");
 					return false;
 				}
-
-				SendPlayerMessage(player, "Spawning item: " + args[1]);
 				
 				EntityAI item = player.SpawnEntityOnGroundPos(args[1], player.GetPosition());
 				
 				if (!item) {
 					SendPlayerMessage(player, "ERROR: Could not create item.");
+					return false;
 				}
 				
+				if ( args.Count() == 3 ) {
+					
+					int itemCount = args[2].ToInt();
+					
+					if (!itemCount || itemCount < 1) {
+						SendPlayerMessage(player, "ERROR: Invalid count.");
+						return false;
+					}
+					
+					// Spawn the rest of the items if count was specified and valid
+					for (int i = 0; i < itemCount - 1; i++) {
+						player.SpawnEntityOnGroundPos(args[1], player.GetPosition());
+					}
+				}
+
+				SendPlayerMessage(player, "Item(s) spawned.");
 				break;
 				
 			case "/here":
-				if ( args.Count() != 2 ) {
-					SendPlayerMessage(player, "Syntax: /here [player] - Moves player to self");
+				if ( args.Count() < 2 ) {
+					SendPlayerMessage(player, "Syntax: /here [player] (distance) - Moves player to self");
 					return false;
-				}				
-				TeleportPlayer(GetPlayerByAny(args[1]), player);
+				}
+				
+				string here = command.Substring( 6, command.Length() - 6 );
+				
+				if ( args.Count() == 3 ) {
+					int hDist = args[2].ToInt();
+					
+					if (!hDist || hDist < 0) {
+						SendPlayerMessage(player, "Invalid distance.");
+						return false;
+					}
+					
+					TeleportPlayer(GetPlayerByAny(here), player, hDist);
+				}
+				else {
+					TeleportPlayer(GetPlayerByAny(here), player, 5);
+				}
+				
 				break;
 				
 			case "/there":
-				if ( args.Count() != 2 ) {
-					SendPlayerMessage(player, "Syntax: /there [player] - Moves self to player");
+				if ( args.Count() < 2 ) {
+					SendPlayerMessage(player, "Syntax: /there [player] (distance) - Moves self to player");
 					return false;
 				}
-				TeleportPlayer(player, GetPlayerByAny(args[1]));
-				break;
+				
+				string there = command.Substring( 7, command.Length() - 7 );
+				
+				if ( args.Count() == 3 ) {
+					int tDist = args[2].ToInt();
+					
+					if (!tDist || tDist < 0) {
+						SendPlayerMessage(player, "Invalid distance.");
+						return false;
+					}
+					
+					TeleportPlayer(player, GetPlayerByAny(there), tDist);
+				}
+				else {
+					TeleportPlayer(player, GetPlayerByAny(there), 5);
+				}
+				
+				break;				
 				
 			case "/suicide":
 				if ( args.Count() != 1 ) {
@@ -380,9 +508,9 @@ class CustomMission: MissionServer
 		type.ToLower();
 		
 		vector pos = player.GetPosition();
-		pos[0] = pos[0] + 2;
-		pos[1] = pos[1] + 2;
-		pos[2] = pos[2] + 2;
+		pos[0] = pos[0] + 1;
+		pos[1] = pos[1] + 1;
+		pos[2] = pos[2] + 1;
 		
 		// DONT spawn a mag as attachment, is buggy ingame, spawn mags in ground instead
 		EntityAI item;
@@ -409,7 +537,6 @@ class CustomMission: MissionServer
 				// Body
 				player.SpawnEntityOnGroundPos("TTsKOJacket_Camo", pos);
 				player.SpawnEntityOnGroundPos("TTSKOPants", pos);
-				player.SpawnEntityOnGroundPos("UKAssVest_Khaki", pos);
 				player.SpawnEntityOnGroundPos("OMNOGloves_Gray", pos);
 				
 				// Waist
@@ -443,6 +570,7 @@ class CustomMission: MissionServer
 				
 				item.GetInventory().CreateAttachment("AK_Suppressor");
 				
+				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
 				player.SpawnEntityOnGroundPos("Mag_SVD_10Rnd", pos);
@@ -519,23 +647,33 @@ class CustomMission: MissionServer
 				subItem.GetInventory().CreateAttachment("Battery9V");
 				
 				break;
+				
+			case "medic":
+				player.SpawnEntityOnGroundPos("BandageDressing", pos);
+				player.SpawnEntityOnGroundPos("BandageDressing", pos);
+				player.SpawnEntityOnGroundPos("BandageDressing", pos);
+				player.SpawnEntityOnGroundPos("SalineBagIV", pos);
+				player.SpawnEntityOnGroundPos("Morphine", pos);
+				player.SpawnEntityOnGroundPos("Epinephrine", pos);
+				
+				break;
 			
 			default:
 				SendPlayerMessage(player, "Invalid type.");
-				SendPlayerMessage(player, "Available types: milgear, ghillie, nv, svd, m4, akm, fx45");
+				SendPlayerMessage(player, "Available types: milgear, ghillie, medic, nv, svd, m4, akm, fx45");
 		}
 	}
 
-	void TeleportPlayer(PlayerBase from, PlayerBase to)
+	void TeleportPlayer(PlayerBase from, PlayerBase to, int distance = 0)
 	{
 		if (!from) return;
 		if (!to) return;
 		
 		vector toPos = to.GetPosition();
 
-		float pos_x = toPos[0] + 10;
-		float pos_z = toPos[2] + 10;
-		float pos_y = GetGame().SurfaceY(pos_x, pos_z) + 5;
+		float pos_x = toPos[0] + distance;
+		float pos_z = toPos[2] + distance;
+		float pos_y = GetGame().SurfaceY(pos_x, pos_z);
 		
 		vector pos = Vector(pos_x, pos_y, pos_z);
 		
@@ -551,12 +689,6 @@ class CustomMission: MissionServer
 		p.SetHealth("", "", -1);
 		
 		return true;
-	}
-	
-
-	override void OnClientRespawnEvent(PlayerIdentity identity, PlayerBase player)
-	{
-		super.OnClientRespawnEvent(identity, player);
 	}
 	
 	override void OnEvent(EventType eventTypeId, Param params)
@@ -582,7 +714,7 @@ class CustomMission: MissionServer
 				string senderName = string.ToString(chatParams.param2, false, false, false);
 				
 				// Get sender player object
-				PlayerBase sender = GetPlayerByName(senderName);
+				PlayerBase sender = GetPlayer(senderName, Identity.NAME);
 				
 				// If fails to get the message sender, stop
 				if (!sender) {
@@ -598,7 +730,7 @@ class CustomMission: MissionServer
 				// Execute specified command
 				Command(sender, cmd);
 				
-				// Return after execution instead of breaking so the command is not exposed to other players nearby
+				// Return after execution instead of breaking to prevent normal event handling
 				return;
 		}
 		
@@ -612,7 +744,7 @@ class CustomMission: MissionServer
 		return m_admins.Find( player.GetIdentity().GetPlainId() ) != -1;
 	}
 
-	PlayerBase GetPlayerByName(string name)
+	PlayerBase GetPlayer(string tag, Identity type)
 	{
 		ref array<Man> players = new array<Man>;
 		GetGame().GetPlayers( players );
@@ -622,29 +754,15 @@ class CustomMission: MissionServer
 		for ( int i = 0; i < players.Count(); ++i )
 		{
 			Class.CastTo(p, players.Get(i));
-
-			if ( p.GetIdentity().GetName() == name ) {
-				return p;
+			
+			if ( type == Identity.NAME ) {
+				if ( p.GetIdentity().GetName() == tag )
+					return p;
 			}
-		}
-		
-		// Player with given parameter not found
-		return NULL;
-	}
-	
-	PlayerBase GetPlayerById(string id)
-	{
-		ref array<Man> players = new array<Man>;
-		GetGame().GetPlayers( players );
-		
-		PlayerBase p;
-		
-		for ( int i = 0; i < players.Count(); ++i )
-		{
-			Class.CastTo(p, players.Get(i));
-
-			if ( p.GetIdentity().GetPlainId() == id ) {
-				return p;
+			
+			else if ( type == Identity.ID ) {
+				if ( p.GetIdentity().GetPlainId() == tag )
+					return p;
 			}
 		}
 		
@@ -657,10 +775,10 @@ class CustomMission: MissionServer
 	{
 		PlayerBase p;
 		
-		p = GetPlayerById(tag);
+		p = GetPlayer(tag, Identity.ID);
 		
 		if (!p) {
-			p = GetPlayerByName(tag);
+			p = GetPlayer(tag, Identity.NAME);
 		}
 		
 		return p;
@@ -736,6 +854,11 @@ class CustomMission: MissionServer
 			itemEnt = itemTop.GetInventory().CreateInInventory("TetracyclineAntibiotics");
 		}
 	}
+};
+
+enum Identity {
+	NAME,
+	ID
 };
 
 Mission CreateCustomMission(string path)
