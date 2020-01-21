@@ -330,7 +330,7 @@ class CustomMission: MissionServer
 		{
 			case "svd":
 				mag = "Mag_SVD_10Rnd";
-				ammo = "AmmoBox_762x39Tracer_20Rnd";
+				ammo = "AmmoBox_762x54Tracer_20Rnd";
 				break;
 			
 			case "m4":
@@ -531,10 +531,18 @@ class CustomMission: MissionServer
 		ref array<Man> players = new array<Man>;
 		GetGame().GetPlayers( players );
 		
-		PlayerBase p;
+		int max = 15;
 		
-		for ( int i = 0; i < players.Count(); ++i )
+		if ( players.Count() < 15 )
+			max = players.Count();
+		
+		PlayerBase p;
+
+		for ( int i = 0; i < max; ++i )
 		{
+			if (i > 0)
+				SendPlayerMessage(player, "*");
+			
 			Class.CastTo(p, players.Get(i));
 			
 			string info = "Player {" + string.ToString(i, false, false, false) + "}";
