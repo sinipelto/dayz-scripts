@@ -41,7 +41,7 @@ Configure the server by editing the [serverDZ.cfg](serverDZ.cfg) file to your li
 
 To access chat commands, you need to add the player's Steam64ID (in decimal format) to the admins.txt file. You can find the user's SteamID using any any Steam profile info webpage, e.g. [SteamFinder](https://www.steamidfinder.com/). E.g. steamID64 (Dec): 76561197960287930
 
-Copy the ID(s) over into the admins.txt file. The file is located in the user profile folder (e.g. C:\Users\USERNAME\Documents\DayZ\admins.txt, aka %USERPROFILE%\Documents\DayZ\admins.txt in Windows). Create the file if it does not exist yet. Simply insert the IDs into the file, separated by newlines and save the file.
+Copy the ID(s) over into the admins.txt file. The file is located in the user profile folder (e.g. C:\Users\USERNAME\AppData\Local\DayZ\admins.txt, aka %USERPROFILE%\AppData\Local\DayZ\admins.txt in Windows). Create the file if it does not exist yet (it is automatically created during the first launch of the server, so you should first move on to launch the server at least once before defining the admins, and then restart the server after. Simply insert the IDs into the file, separated by newlines and save the file.
 
 Once finished, launch off the server by running [start.bat](start.bat). A Server GUI log window opens and the server should start in a few moments. Ensure a log message says that the cloud Hive is connected, and forward required server ports to ensure your server will be listed in the public server listing.
 
