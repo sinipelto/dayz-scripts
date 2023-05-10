@@ -48,3 +48,7 @@ Once finished, launch off the server by running [start.bat](start.bat). A Server
 Once the server is up and running, test your server by launching DayZ and connecting to your server using the server menu.
 
 Once you are in the game, you can issue chat commands by sending a chat message starting with '/' (e.g. '/help').
+
+# Special mentions
+
+Thanks [antonioganea](https://github.com/antonioganea/), great job with creating a code injector [tci](https://github.com/antonioganea/tci) to allow dynamic updates in the server code logic and lot faster and more robust development process for the server-side scripting.
