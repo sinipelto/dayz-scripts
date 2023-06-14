@@ -47,11 +47,22 @@ class CustomMission: MissionServer
 	// Players that have God Mode enabled, listed here
 	private ref TIntArray m_gods;
 	
+	// Keep track of internal call queue limit to prevent overloads
+	private int m_calls;
+	
+	// Limit the number of function calls
+	// TODO: figure out proper limit when the performance starts to degrade
+	// TODO make constant
+	private int CALLS_LIMIT;
+	
 	override void OnInit()
 	{
 		super.OnInit();
 		
-		// Initialize needed arrays here
+		// Initialize needed class members here
+		m_calls = 0;
+		CALLS_LIMIT = 50;
+
 		m_admins = new TStringArray;
 		m_gods = new TIntArray;
 		
@@ -196,49 +207,56 @@ class CustomMission: MissionServer
 				
 			case "/god":
 				if ( args.Count() != 2 ) {
-					SendPlayerMessage(player, "Syntax: /god [0-1] - Enable or disable semi-god mode");
+					SendPlayerMessage(player, "Syntax: /god [0-1] - Enable or disable semi god mode (BEWARE: huge damage in short timespan can still kill you!)");
 					return false;
 				}
 				
 				int setGod = args[1].ToInt();
-				
+				int pId = player.GetID();
+
 				// Add player to gods, call godmode function every 1 sec
 				if (setGod == 1) {
-					int pId = player.GetID();
 					
 					if ( m_gods.Find(pId) != -1 ) {
-						SendPlayerMessage(player, "Player is already god.");
+						SendPlayerMessage(player, "You are already god.");
 						return false;
 					}
-					m_gods.Insert(pId);
-					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.GodMode, 1000, true, player);
-					SendPlayerMessage(player, "Godmode enabled.");
+
+					// Here we only need to add the new call to queue
+					// However make sure we are within safe limits
+					// TODO: Figure out more robust system to ensure performance does not degrade over time
+					if (m_calls < CALLS_LIMIT) {
+						m_gods.Insert( pId );
+						GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.GodMode, 1000, true, player);
+						m_calls += 1;
+						SendPlayerMessage(player, "God mode enabled.");
+					} else {
+						SendPlayerMessage(player, "ERROR: Call queue limit reached. Please try again later.");
+					}
 				}
 				// Do vice versa except for other gods
 				else if (setGod == 0) {
 					// Remove player id from gods list if found
-					int godIdx = m_gods.Find( player.GetID() );
+					int godIdx = m_gods.Find( pId );
+
 					if (godIdx == -1) {
-						SendPlayerMessage(player, "Player not found in gods.");
+						SendPlayerMessage(player, "God mode not currently enabled for player.");
 						return false;
 					}
 					else {
 						m_gods.Remove(godIdx);
 					}
 					
+					// The problem is we cant remove the interval function call for a specific player
+					// We also dont want to check for all god players in a single fucntion call => too slow
+					// Thus we need to re-queue the function call for each god player separately (serverside)
 					// Remove godmode function from call queue but add again for remaining gods
-					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.GodMode);
-					
-					foreach (int pid : m_gods)
-					{
-						PlayerBase godPlayer = GetPlayer(pid.ToString(), Identity.PID);
-						GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.GodMode, 1000, true, godPlayer);
-					}
+					RefreshGodQueue();
 					
 					SendPlayerMessage(player, "Godmode disabled.");
 				}
 				else {
-					SendPlayerMessage(player, "ERROR: Invalid argument given. Argument: 0-1");
+					SendPlayerMessage(player, "ERROR: Invalid argument given. Argument should be: 0-1");
 					return false;
 				}
 				break;
@@ -411,16 +429,53 @@ class CustomMission: MissionServer
 		
 		return true;
 	}
-	
+
+	// Just keep track of the active calls, no boundary checks here
+	void RefreshGodQueue()
+	{
+		GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.GodMode);
+		m_calls = 0;
+
+		foreach (int pId : m_gods)
+		{
+			PlayerBase godPlayer = GetPlayer(pId.ToString(), Identity.PID);
+			if (!godPlayer) {
+				m_gods.Remove( pId );
+				continue;
+			}
+			GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.GodMode, 1000, true, godPlayer);
+			m_calls += 1;
+		}
+	}
+
 	void GodMode(PlayerBase player)
 	{
-		if (!player || player.GetHealth("", "") <= 0.0) {
-			m_gods.Remove( player.GetID() );
+//		// if we only had the PID
+//		PlayerBase player = GetPlayer(pId.ToString(), Identity.PID);
+
+		// If invalid player
+		if (!player) {
+			// Make sure this function call gets removed from the queue
+			// So the function call queue does not get overloaded
+			// Refresh call takes care of removing invalid PIDs
+			RefreshGodQueue();
 			return;
 		}
 		
+		int pId = player.GetID();
+		
 		// If player is not god, do nothing
-		if (m_gods.Find( player.GetID() ) == -1) {
+		if (m_gods.Find( pId ) == -1) {
+			// Refresh at this point to get the pid removed from the list
+			RefreshGodQueue();
+			return;
+		}
+
+		// If player already dead, make sure godmode gets disabled
+		if (player.GetHealth("", "") <= 0.0) {
+			// We have just checked pid is in the list, so manually remove the pid and refresh
+			m_gods.Remove( pId );
+			RefreshGodQueue();
 			return;
 		}
 		
