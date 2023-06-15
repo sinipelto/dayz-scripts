@@ -65,7 +65,8 @@ class CustomMission: MissionServer
 
 		m_admins = new TStringArray;
 		m_gods = new TIntArray;
-		
+
+		// Load admins from txt file on start
 		LoadAdmins();
 	}
 	
@@ -101,15 +102,18 @@ class CustomMission: MissionServer
 
 	bool Command(PlayerBase player, string command)
 	{
-		const string helpMsg = "Available commands: /help /car /warp /kill /give /gear /ammo /say /info /heal /god /suicide /here /there";
+		const string helpMsg = "Available commands: /help /car /warp /kill /give /gear /ammo /say /info /heal /god /suicide /here /there (You get more specific help by entering the command)";
 
 		// Split command message into args
 		TStringArray args = new TStringArray;
 		MySplit(command, " ", args);
 		
 		string arg;
+		int argc;
 		PlayerBase target;
-		int dist;
+		
+		int distX;
+		int distZ;
 		
 		switch (args[0])
 		{
@@ -206,19 +210,37 @@ class CustomMission: MissionServer
 				return false;
 				
 			case "/god":
-				if ( args.Count() != 2 ) {
-					SendPlayerMessage(player, "Syntax: /god [0-1] - Enable or disable semi god mode (BEWARE: huge damage in short timespan can still kill you!)");
+				argc = args.Count();
+				if ( argc < 2 || argc > 3 ) {
+					SendPlayerMessage(player, "Syntax: /god <0-1> '[PLAYER_IDENTITY]' - Enable or disable semi god mode.");
+					SendPlayerMessage(player, "Omit player identity to apply to yourself, remember 'single' quotes around! (BEWARE: huge damage in short timespan can still kill you!)");
 					return false;
 				}
-				
+
 				int setGod = args[1].ToInt();
-				int pId = player.GetID();
+				int pId;
+
+				// If no player specified, player is self
+				if ( argc > 2 )
+				{
+					target = player;
+				}
+				// Otherwise retrieve the target player if exists and make them god
+				else {
+					arg = MyTrim(command, "'");
+					target = GetPlayer(arg, Identity.ANY);
+
+					if (!target) {
+						SendPlayerMessage(player, "ERROR: Target player not found. Double check given player name/steamID.");
+						return false;
+					}
+				}
 
 				// Add player to gods, call godmode function every 1 sec
 				if (setGod == 1) {
 					
 					if ( m_gods.Find(pId) != -1 ) {
-						SendPlayerMessage(player, "You are already god.");
+						SendPlayerMessage(player, "You / Target player is already god. No need to re-enable.");
 						return false;
 					}
 
@@ -229,7 +251,7 @@ class CustomMission: MissionServer
 						m_gods.Insert( pId );
 						GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.GodMode, 1000, true, player);
 						m_calls += 1;
-						SendPlayerMessage(player, "God mode enabled.");
+						SendPlayerMessage(player, "God mode enabled for you/target.");
 					} else {
 						SendPlayerMessage(player, "ERROR: Call queue limit reached. Please try again later.");
 					}
@@ -240,7 +262,7 @@ class CustomMission: MissionServer
 					int godIdx = m_gods.Find( pId );
 
 					if (godIdx == -1) {
-						SendPlayerMessage(player, "God mode not currently enabled for player.");
+						SendPlayerMessage(player, "God mode not currently enabled for you/player to remove.");
 						return false;
 					}
 					else {
@@ -263,7 +285,7 @@ class CustomMission: MissionServer
 				
 			case "/give":
 				if ( args.Count() < 2 || args.Count() > 3 ) {
-					SendPlayerMessage(player, "Syntax: /give [ITEM_NAME] (AMOUNT) - Spawn item on ground, default amount is 1");
+					SendPlayerMessage(player, "Syntax: /give <ITEM_NAME> [AMOUNT] - Spawn item on ground, default amount is 1");
 					return false;
 				}
 				
@@ -291,46 +313,61 @@ class CustomMission: MissionServer
 				break;
 				
 			case "/here":
-				if ( args.Count() < 2 ) {
-					SendPlayerMessage(player, "Syntax: /here '[PLAYER IDENTITY]' (DISTANCE) - Moves a player to self, remember to use single quotes around identity");
+				if ( args.Count() < 2 || args.Count() > 4 ) {
+					SendPlayerMessage(player, "Syntax: /here '<PLAYER IDENTITY>' [DISTANCE_X = 0] [DISTANCE_Z = 0]");
+					SendPlayerMessage(player, "Moves a player to self, remember to use single quotes around identity (player name, player ID, steam ID). Optionally add distance to the location if necessary.");
 					return false;
 				}
 				
-				PrepareTeleport(command, args, target, dist);
+				PrepareTeleport(command, args, target, distX, distZ);
 				
 				if (!target) {
 					SendPlayerMessage(player, "Could not found target player.");
 					return false;
-				}				
-				if (dist < 1) {
-					SendPlayerMessage(player, "Invalid distance.");
+				}
+
+				if (ValidateDist(player, target.GetPosition(), distX, distZ)) {
+					SendPlayerMessage(player, "Invalid distance(s) given.");
 					return false;
 				}
-				TeleportPlayer(target, player, dist);					
+
+				TeleportPlayer(target, player, distX, distZ);
 				break;
 				
 			case "/there":
-				if ( args.Count() < 2 ) {
-					SendPlayerMessage(player, "Syntax: /there '[PLAYER IDENTITY]' (DISTANCE) - Moves self to a player");
+				if ( args.Count() < 2 || args.Count() > 4 ) {
+					SendPlayerMessage(player, "Syntax: /there '<PLAYER IDENTITY>' [DISTANCE_X = 0] [DISTANCE_Z = 0] - Moves self to a player, and add or sub distance to him if necessary.");
 					return false;
 				}
 				
-				PrepareTeleport(command, args, target, dist);
+				PrepareTeleport(command, args, target, distX, distZ);
 				
 				if (!target) {
-					SendPlayerMessage(player, "Could not found target player.");
-					return false;
-				}				
-				if (dist < 1) {
-					SendPlayerMessage(player, "Invalid distance.");
+					SendPlayerMessage(player, "Could not found target player. Double check given player name, playerID or SteamID");
 					return false;
 				}
-				TeleportPlayer(player, target, dist);					
+
+				if (ValidateDist(player, target.GetPosition(), distX, distZ)) {
+					SendPlayerMessage(player, "Invalid distance(s) given.");
+					return false;
+				}
+
+				TeleportPlayer(player, target, distX, distZ);					
 				break;
 
+			// Could be integrated to the /kill command (without params = you)
+			// But separated as own command for the sake of clarity to avoid accidental suicides!
 			case "/suicide":
-				if ( args.Count() != 1 ) {
-					SendPlayerMessage(player, "Syntax: /suicide - Commit a suicide");
+				// Text args can be > 1, but min 1 + cmd = min 2
+				if ( args.Count() < 2 ) {
+					SendPlayerMessage(player, "Syntax: /suicide <CONFIRMATION_TEXT> - Commit a suicide. Confirm this by typing any word as the parameter!");
+					return false;
+				}
+
+				// Make sure something is entered after command
+				if (args[2] == "")
+				{
+					SendPlayerMessage(player, "Empty confirmation");
 					return false;
 				}
 				
@@ -342,7 +379,7 @@ class CustomMission: MissionServer
 
 			case "/kill":
 				if ( args.Count() < 2 ) {
-					SendPlayerMessage(player, "Syntax: /kill '[PLAYER IDENTITY]' - Kills a player by given identity, use single quotes around");
+					SendPlayerMessage(player, "Syntax: /kill '<PLAYER_IDENTITY>' - Kills a player by given identity (name, playerID, steamID), use single quotes around");
 					return false;
 				}
 				
@@ -366,13 +403,40 @@ class CustomMission: MissionServer
 		return true;
 	}
 	
-	void PrepareTeleport(string cmd, TStringArray args, out PlayerBase target, out int distance)
+	void PrepareTeleport(string cmd, TStringArray args, out PlayerBase target, out int distX, out int distZ)
 	{
 		// Parse target player name: "...stuff 'input' stuff..." -> "input"
 		string name = MyTrim(cmd, "'");
 		
-		distance = args[args.Count() - 1].ToInt();
+		distZ = args[args.Count() - 1].ToInt();
+		distX = args[args.Count() - 2].ToInt();
+
 		target = GetPlayer(name, Identity.ANY);
+	}
+
+	bool ValidateDist(PlayerBase player, vector targetPos, int distX, int distZ)
+	{
+		// Sanity checks
+		if (!player) return false;
+		if (!targetPos) {
+			SendPlayerMessage(player, "ERROR: Invalid target position given to ValidateDist().");
+			return false;
+		}
+
+		// TODO additional logic for validating map boundaries are met with the distance
+		if (distX < -1000 || distX > 1000) {
+			SendPlayerMessage(player, "ERROR: Given X distance out of bounds. ");
+			return false;
+		}
+
+		// TODO additional logic for validating map boundaries are met with the distance
+		if (distZ < -1000 || distZ > 1000) {
+			SendPlayerMessage(player, "ERROR: Given Z distance out of bounds. ");
+			return false;
+		}
+
+		// All tests passed OK
+		return true;
 	}
 	
 	bool SpawnAmmo(PlayerBase player, string type, int amount = 1)
@@ -657,7 +721,7 @@ class CustomMission: MissionServer
 		// Send player count
 		SendPlayerMessage(player, "Players on server: " + players.Count());
 		
-		// Maximum amount of single line entries that fit in the chat history: 12
+		// Maximum amount of single line entries that fit in the chat history
 		int max = 10;
 		
 		if ( players.Count() < max )
@@ -671,6 +735,9 @@ class CustomMission: MissionServer
 			//	SendPlayerMessage(player, "*");
 			
 			Class.CastTo(p, players.Get(i));
+
+			// Safety check
+			if (!p) continue;
 			
 			string info = "Player {" + string.ToString(i, false, false, false) + "}";
 			info = info + "  " + "Name: " + p.GetIdentity().GetName();
@@ -868,15 +935,16 @@ class CustomMission: MissionServer
 		return true;
 	}
 
-	void TeleportPlayer(PlayerBase from, PlayerBase to, int distance)
+	void TeleportPlayer(PlayerBase from, PlayerBase to, int distX, int distZ)
 	{
 		if (!from) return;
 		if (!to) return;
-		
+
 		vector toPos = to.GetPosition();
 
-		float pos_x = toPos[0] + distance;
-		float pos_z = toPos[2] + distance;
+		// Distances already validated
+		float pos_x = toPos[0] + distX;
+		float pos_z = toPos[2] + distZ;
 		float pos_y = GetGame().SurfaceY(pos_x, pos_z);
 		
 		vector pos = Vector(pos_x, pos_y, pos_z);
